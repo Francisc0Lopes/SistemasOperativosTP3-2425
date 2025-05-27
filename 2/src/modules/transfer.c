@@ -21,10 +21,16 @@ void transfer(account_t *accounts, pthread_mutex_t *locks, int from, int to, dou
     pthread_mutex_lock(&locks[first]);
     pthread_mutex_lock(&locks[second]);
 
+    printf("ANTES - Balance da conta a enviar: %lf\n", accounts[from].balance );
+    printf("ANTES - Balance da conta a receber: %lf\n", accounts[to].balance );
+
     if (accounts[from].balance >= amount) {
         accounts[from].balance -= amount;
         accounts[to].balance += amount;
     }
+
+    printf("DEPOIS - Balance da conta a enviar: %lf\n", accounts[from].balance );
+    printf("DEPOIS - Balance da conta a receber: %lf\n", accounts[to].balance );
 
     pthread_mutex_unlock(&locks[second]);
     pthread_mutex_unlock(&locks[first]);
