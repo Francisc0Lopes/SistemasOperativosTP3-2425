@@ -16,9 +16,8 @@ void *worker(void *arg) {
     size_t start = a->tid * chunk;
     size_t end = (a->tid == a->nThreads-1) ? a->v_sz : start + chunk;
 
-    // 1ª fase: min/max locais
     int min = a->v[start], max = a->v[start];
-    for (size_t i = start+1; i < end; ++i) {
+    for(size_t i = start+1; i < end; ++i){
         if (a->v[i] < min) min = a->v[i];
         if (a->v[i] > max) max = a->v[i];
     }
@@ -27,10 +26,9 @@ void *worker(void *arg) {
 
     sot_barrier_wait(a->barrier);
 
-    // 1ª fase: min/max globais (apenas tid==0 faz)
-    if (a->tid == 0) {
+    if(a->tid == 0){
         int min_g = a->min_local[0], max_g = a->max_local[0];
-        for (int i = 1; i < a->nThreads; ++i) {
+        for(int i = 1; i < a->nThreads; ++i){
             if (a->min_local[i] < min_g) min_g = a->min_local[i];
             if (a->max_local[i] > max_g) max_g = a->max_local[i];
         }
@@ -43,12 +41,11 @@ void *worker(void *arg) {
     int min_g = *(a->min_global);
     int max_g = *(a->max_global);
 
-    // 2ª fase: normalização e soma local
     int sum = 0;
-    for (size_t i = start; i < end; ++i) {
-        if (max_g == min_g) {
+    for(size_t i = start; i < end; ++i){
+        if(max_g == min_g){
             a->v[i] = 0;
-        } else {
+        }else{
             a->v[i] = (int)round((a->v[i] - min_g) * 100.0 / (max_g - min_g));
         }
         sum += a->v[i];
@@ -57,8 +54,7 @@ void *worker(void *arg) {
 
     sot_barrier_wait(a->barrier);
 
-    // 2ª fase: média global (apenas tid==0 faz)
-    if (a->tid == 0) {
+    if(a->tid == 0){
         int total = 0;
         for (int i = 0; i < a->nThreads; ++i) total += a->sum_local[i];
         *(a->mean) = (double)total / a->v_sz;
@@ -68,8 +64,7 @@ void *worker(void *arg) {
 
     double mean = *(a->mean);
 
-    // 3ª fase: classificação
-    for (size_t i = start; i < end; ++i) {
+    for(size_t i = start; i < end; ++i){
         a->v[i] = (a->v[i] >= mean) ? 1 : 0;
     }
 
@@ -87,7 +82,7 @@ void norm_min_max_and_classify_parallel(int v[], size_t v_sz, int nThreads){
     sot_barrier_t barrier;
     sot_barrier_init(&barrier, nThreads);
 
-    for (int i = 0; i < nThreads; ++i) {
+    for(int i = 0; i < nThreads; ++i){
         args[i].v = v;
         args[i].v_sz = v_sz;
         args[i].nThreads = nThreads;
@@ -101,7 +96,7 @@ void norm_min_max_and_classify_parallel(int v[], size_t v_sz, int nThreads){
         args[i].max_global = &max_global;
         pthread_create(&threads[i], NULL, worker, &args[i]);
     }
-    for (int i = 0; i < nThreads; ++i) {
+    for(int i = 0; i < nThreads; ++i){
         pthread_join(threads[i], NULL);
     }
     sot_barrier_destroy(&barrier);

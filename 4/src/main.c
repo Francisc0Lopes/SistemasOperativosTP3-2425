@@ -15,7 +15,7 @@ int main() {
     threadpool_t *tp;
     threadpool_init(&tp, 10, 2, 4);
 
-    for (int i = 0; i < 8; ++i) {
+    for(int i = 0; i < 8; ++i){
         int *id = malloc(sizeof(int));
         *id = i;
         threadpool_submit(tp, test_func, id);

@@ -21,10 +21,10 @@ struct threadpool {
 
 static void *worker_thread(void *arg) {
     threadpool_t *tp = (threadpool_t *)arg;
-    while (1) {
+    while(1){
         work_item_t *item = sharedbuffer_get(tp->queue);
-        if (item == NULL) continue;
-        if (item->func == NULL) { // sinal de terminação
+        if(item == NULL) continue;
+        if(item->func == NULL){ // sinal de terminação
             free(item);
             break;
         }
@@ -44,7 +44,7 @@ int threadpool_init(threadpool_t **tp_ptr, int queueDim, int nthreads_min, int n
     tp->accepting = true;
     pthread_mutex_init(&tp->lock, NULL);
     pthread_cond_init(&tp->cond, NULL);
-    for (int i = 0; i < nthreads_min; ++i)
+    for(int i = 0; i < nthreads_min; ++i)
         pthread_create(&tp->threads[i], NULL, worker_thread, tp);
     *tp_ptr = tp;
     return 0;
@@ -52,7 +52,7 @@ int threadpool_init(threadpool_t **tp_ptr, int queueDim, int nthreads_min, int n
 
 int threadpool_submit(threadpool_t *tp, wi_function_t func, void *args) {
     pthread_mutex_lock(&tp->lock);
-    if (!tp->accepting) {
+    if(!tp->accepting){
         pthread_mutex_unlock(&tp->lock);
         return -1;
     }
@@ -69,14 +69,13 @@ int threadpool_destroy(threadpool_t *tp) {
     tp->accepting = false;
     pthread_mutex_unlock(&tp->lock);
 
-    // Envia sinais de terminação para cada worker
-    for (int i = 0; i < tp->nthreads; ++i) {
+    for(int i = 0; i < tp->nthreads; ++i){
         work_item_t *item = malloc(sizeof(work_item_t));
         item->func = NULL;
         item->args = NULL;
         sharedbuffer_put(tp->queue, item);
     }
-    for (int i = 0; i < tp->nthreads; ++i)
+    for(int i = 0; i < tp->nthreads; ++i)
         pthread_join(tp->threads[i], NULL);
 
     sharedbuffer_destroy(tp->queue);

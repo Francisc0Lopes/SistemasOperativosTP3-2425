@@ -17,6 +17,5 @@ int main() {
     for (size_t i = 0; i < v_sz; ++i) printf("%d ", v[i]);
     printf("\n");
 
-    // Esperado: 0 0 1 1 1
     return 0;
 }

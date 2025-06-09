@@ -14,7 +14,6 @@ typedef struct {
 } simulation_t;
 
 void transfer(account_t *accounts, pthread_mutex_t *locks, int from, int to, double amount) {
-    // Ordena os índices para evitar deadlock
     int first = from < to ? from : to;
     int second = from < to ? to : from;
 
@@ -24,7 +23,7 @@ void transfer(account_t *accounts, pthread_mutex_t *locks, int from, int to, dou
     printf("ANTES - Balance da conta a enviar: %lf\n", accounts[from].balance );
     printf("ANTES - Balance da conta a receber: %lf\n", accounts[to].balance );
 
-    if (accounts[from].balance >= amount) {
+    if(accounts[from].balance >= amount){
         accounts[from].balance -= amount;
         accounts[to].balance += amount;
     }
@@ -38,10 +37,10 @@ void transfer(account_t *accounts, pthread_mutex_t *locks, int from, int to, dou
 
 void *perform_transfers(void *arg) {
     simulation_t *sim = (simulation_t *)arg;
-    for (int i = 0; i < NUM_TRANSFERS_PER_THREAD; i++) {
+    for(int i = 0; i < NUM_TRANSFERS_PER_THREAD; i++){
         int from = rand() % sim->num_accounts;
         int to = rand() % sim->num_accounts;
-        while (to == from) {
+        while(to == from){
             to = rand() % sim->num_accounts;
         }
         double amount = (rand() % 100) + 1;

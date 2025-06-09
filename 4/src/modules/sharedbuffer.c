@@ -13,7 +13,7 @@ struct sharedbuffer {
     pthread_cond_t not_full;
 };
 
-sharedbuffer_t *sharedbuffer_create(int capacity) {
+sharedbuffer_t *sharedbuffer_create(int capacity){
     sharedbuffer_t *sb = malloc(sizeof(sharedbuffer_t));
     sb->buffer = malloc(sizeof(void *) * capacity);
     sb->capacity = capacity;
@@ -26,7 +26,7 @@ sharedbuffer_t *sharedbuffer_create(int capacity) {
     return sb;
 }
 
-void sharedbuffer_destroy(sharedbuffer_t *sb) {
+void sharedbuffer_destroy(sharedbuffer_t *sb){
     pthread_mutex_destroy(&sb->mutex);
     pthread_cond_destroy(&sb->not_empty);
     pthread_cond_destroy(&sb->not_full);
@@ -34,9 +34,9 @@ void sharedbuffer_destroy(sharedbuffer_t *sb) {
     free(sb);
 }
 
-void sharedbuffer_put(sharedbuffer_t *sb, void *item) {
+void sharedbuffer_put(sharedbuffer_t *sb, void *item){
     pthread_mutex_lock(&sb->mutex);
-    while (sb->count == sb->capacity) {
+    while(sb->count == sb->capacity){
         pthread_cond_wait(&sb->not_full, &sb->mutex);
     }
     sb->buffer[sb->in] = item;
@@ -46,9 +46,9 @@ void sharedbuffer_put(sharedbuffer_t *sb, void *item) {
     pthread_mutex_unlock(&sb->mutex);
 }
 
-void *sharedbuffer_get(sharedbuffer_t *sb) {
+void *sharedbuffer_get(sharedbuffer_t *sb){
     pthread_mutex_lock(&sb->mutex);
-    while (sb->count == 0) {
+    while(sb->count == 0){
         pthread_cond_wait(&sb->not_empty, &sb->mutex);
     }
     void *item = sb->buffer[sb->out];

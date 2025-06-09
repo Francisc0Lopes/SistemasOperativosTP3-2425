@@ -22,12 +22,12 @@ int sot_barrier_wait (sot_barrier_t *barrier){
     pthread_mutex_lock(&barrier->mutex);
     int local_phase = barrier->phase;
     barrier->count++;
-    if (barrier->count == barrier->num_threads) {
+    if(barrier->count == barrier->num_threads){
         barrier->count = 0;
         barrier->phase++;
         pthread_cond_broadcast(&barrier->cond);
     } else {
-        while (local_phase == barrier->phase) {
+        while(local_phase == barrier->phase){
             pthread_cond_wait(&barrier->cond, &barrier->mutex);
         }
     }
