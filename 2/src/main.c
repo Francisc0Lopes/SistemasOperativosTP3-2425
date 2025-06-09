@@ -41,7 +41,7 @@ int main() {
         total_balance += accounts[i].balance;
     }
 
-    printf("Total balance after transfers: %.2f\n", total_balance);
+    printf("Total apos as tranferencias: %.2f\n", total_balance);
 
     for (int i = 0; i < ACCOUNTS_MAX; i++) {
         pthread_mutex_destroy(&locks[i]);
