@@ -12,10 +12,10 @@
 #include "../modules/log.h"
 #include "../modules/ioaux.h"
 #include "../modules/erroraux.h"
+#include "../modules/threadpool.h"
 
 #define MAX_HEADER_LINE 1024 
 #define MAX_BUFFER_SIZE 8192 
-
 
 // Variáveis globais de configuração, estatísticas e estado do servidor
 static ServerConfig config;
@@ -25,9 +25,7 @@ static int unixServerSocket = -1;
 static volatile int running = 0; // Indica se o servidor está ativo
 static pthread_t acceptThread;
 static pthread_t menuThread;
-
-
-
+static threadpool_t *tp = NULL; // Thread pool global
 
 // Protótipos das funções privadas
 static void *accept_thread(void *arg);
@@ -37,25 +35,19 @@ static int process_client_request(int clientSocket);
 static int parse_header(int clientSocket, char **program, char **args, char **filename, size_t *filesize);
 static int execute_program(int clientSocket, const char *program, const char *args, size_t filesize);
 
-
-
-
-
 int main(int argc, char *argv[]){ // Função principal do servidor
-	
     ServerConfig config={
         .tcpPort = 8000, // Porta TCP por defeito
         .unixSocketPath = "server.sock", // Caminho do socket UNIX
         .logFile = "server.log" // Ficheiro de log
     };
 
-
     if(server_init(&config) < 0){ // Inicializa o servidor
         fprintf(stderr, "ERRO ao iniciar o servidor\n");
         return EXIT_FAILURE;
     }
     if(server_start() < 0){ // Inicia o servidor (abre sockets e cria threads)
-		fprintf(stderr, "ERRO ao arrancar o servidor\n");
+        fprintf(stderr, "ERRO ao arrancar o servidor\n");
         server_stop();
         return EXIT_FAILURE;
     }
@@ -67,14 +59,6 @@ int main(int argc, char *argv[]){ // Função principal do servidor
 
     return EXIT_SUCCESS;
 }
-
-
-
-
-
-
-
-
 
 int server_init(ServerConfig *cfg){ // Inicializa a configuração e recursos do servidor
     config.tcpPort = cfg->tcpPort;
@@ -89,19 +73,18 @@ int server_init(ServerConfig *cfg){ // Inicializa a configuração e recursos do
 
     // Inicializa o ficheiro de log
     if(log_init(config.logFile) < 0){
-		fprintf(stderr, "ERRO ao iniciar o ficheiro de log\n");
+        fprintf(stderr, "ERRO ao iniciar o ficheiro de log\n");
+        return -1;
+    }
+
+    // Inicializa o thread pool (exemplo: fila 32, 4 a 16 threads)
+    if(threadpool_init(&tp, 32, 4, 16) != 0){
+        fprintf(stderr, "ERRO ao iniciar o thread pool\n");
         return -1;
     }
 
     return 0;
 }
-
-
-
-
-
-
-
 
 int server_start(){ // Inicia os sockets do servidor e as threads principais
     char msg[256];
@@ -150,14 +133,6 @@ int server_start(){ // Inicia os sockets do servidor e as threads principais
     return 0;
 }
 
-
-
-
-
-
-
-
-
 int server_stop(){ // Para o servidor e liberta recursos
     running = 0; // Desativa a flag de execução
 
@@ -175,6 +150,12 @@ int server_stop(){ // Para o servidor e liberta recursos
     pthread_join(acceptThread, NULL); // Aguarda o término da thread de aceitação
     pthread_join(menuThread, NULL);   // Aguarda o término da thread do menu
 
+    // Destroi o thread pool (espera todos os trabalhos terminarem)
+    if(tp) {
+        threadpool_destroy(tp);
+        tp = NULL;
+    }
+
     log_message(INFO, "Servidor a encerrar");
     log_close(); // Fecha o ficheiro de log
 
@@ -184,13 +165,6 @@ int server_stop(){ // Para o servidor e liberta recursos
 
     return 0;
 }
-
-
-
-
-
-
-
 
 int server_get_stats(ServerStats *out_stats){ // Devolve uma cópia das estatísticas do servidor
     if(!out_stats){
@@ -203,13 +177,6 @@ int server_get_stats(ServerStats *out_stats){ // Devolve uma cópia das estatís
 
     return 0;
 }
-
-
-
-
-
-
-
 
 static void *accept_thread(void *arg){ // Thread que aceita conexões dos clientes
     fd_set readfds;
@@ -240,22 +207,18 @@ static void *accept_thread(void *arg){ // Thread que aceita conexões dos client
             client->socket = clientSocket;
             client->isTcp = 1;
 
-            pthread_t thread;
-            if(pthread_create(&thread, NULL, client_handler_thread, client) != 0){
-                log_message(ERROR, "ERRO ao criar thread para cliente");
+            // Submete o trabalho ao thread pool
+            if(threadpool_submit(tp, client_handler_thread, client) != 0){
+                log_message(ERROR, "ERRO ao submeter trabalho ao thread pool");
                 close(clientSocket);
                 free(client);
-            }
-            else{
+            } else {
                 pthread_mutex_lock(&stats.lock);
                 stats.activeConnections++;
                 stats.totalTcpConnections++;
                 pthread_mutex_unlock(&stats.lock);
             }
         }
-
-
-
 
         if(FD_ISSET(unixServerSocket, &readfds)){
             int clientSocket = un_server_socket_accept(unixServerSocket); // Aceita conexão UNIX
@@ -268,12 +231,12 @@ static void *accept_thread(void *arg){ // Thread que aceita conexões dos client
             client->socket = clientSocket;
             client->isTcp = 0;
 
-            pthread_t thread;
-            if(pthread_create(&thread, NULL, client_handler_thread, client) != 0){
-                log_message(ERROR, "ERRO ao criar thread para cliente");
+            // Submete o trabalho ao thread pool
+            if(threadpool_submit(tp, client_handler_thread, client) != 0){
+                log_message(ERROR, "ERRO ao submeter trabalho ao thread pool");
                 close(clientSocket);
                 free(client);
-            }else{
+            } else {
                 pthread_mutex_lock(&stats.lock);
                 stats.activeConnections++;
                 stats.totalUnixConnections++;
@@ -284,14 +247,6 @@ static void *accept_thread(void *arg){ // Thread que aceita conexões dos client
 
     return NULL;
 }
-
-
-
-
-
-
-
-
 
 static void *menu_thread(void *arg){ // Thread que mostra o menu de controlo do servidor
     char input[256];
@@ -327,14 +282,6 @@ static void *menu_thread(void *arg){ // Thread que mostra o menu de controlo do 
     return NULL;
 }
 
-
-
-
-
-
-
-
-
 static void *client_handler_thread(void *arg){ // Thread que trata da comunicação com um cliente
     ClientConnection *client = (ClientConnection *)arg;
     int clientSocket = client->socket;
@@ -352,14 +299,6 @@ static void *client_handler_thread(void *arg){ // Thread que trata da comunicaç
     close(clientSocket);
     return NULL;
 }
-
-
-
-
-
-
-
-
 
 static int process_client_request(int clientSocket){
     char *program = NULL;
@@ -383,20 +322,11 @@ static int process_client_request(int clientSocket){
         return -1;
     }
 
-  
     free(program);
     free(args);
     free(filename);
     return 0;
 }
-
-
-
-
-
-
-
-
 
 static int parse_header(int clientSocket, char **program, char **args, char **filename, size_t *filesize){
     char line[MAX_HEADER_LINE];
@@ -443,12 +373,6 @@ static int parse_header(int clientSocket, char **program, char **args, char **fi
     log_message(INFO, "Header parsed");
     return 0;
 }
-
-
-
-
-
-
 
 static int execute_program(int clientSocket, const char *program, const char *args, size_t filesize){
     int pipe_stdin[2], pipe_stdout[2];
